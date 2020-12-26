@@ -1,0 +1,167 @@
+from PIL import Image
+from PIL import ImageStat
+import math
+import cv2
+import numpy as np
+
+
+import matplotlib.image as mtp
+def brightness(im_file):
+    im = Image.open(im_file)
+    stat = ImageStat.Stat(im)
+    gs = (math.sqrt(0.241*(r**2) + 0.691*(g**2) + 0.068*(b**2))
+    for r,g,b in im.getdata())
+    return sum(gs)/stat.count[0]
+
+def correccion(name):
+    img = cv2.imread(name)
+    img_to_yuv = cv2.cvtColor(img, cv2.COLOR_BGR2YUV)
+    img_to_yuv[:, :, 0] = cv2.equalizeHist(img_to_yuv[:, :, 0])
+    hist_equalization_result = cv2.cvtColor(img_to_yuv, cv2.COLOR_YUV2BGR)
+    resized = cv2.resize(hist_equalization_result, (800, 600), interpolation=cv2.INTER_AREA)
+
+    im_file = "res_" + name
+
+    cv2.imwrite(im_file, resized)
+
+    x = brightness(im_file)
+    print(im_file, ':', x)
+
+    if x< 130 and x>128:
+        return True
+    else:
+        return False
+
+
+def correlacion(name):
+    img = cv2.imread(name, 0)
+    img = cv2.medianBlur(img, 5)
+    cimg = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
+
+    ##Obtener circulos de la imagen
+    circles = cv2.HoughCircles(img, cv2.HOUGH_GRADIENT, 1, 20, param1=100, param2=20, minRadius=10, maxRadius=30)
+
+    circles = np.uint16(np.around(circles))
+
+    # Separar la muestra de los valores de ajuste lineal
+    muestra = []
+    aj_lineal = []
+    ymax = 0
+    for i in circles[0, :]:
+        aj_lineal.append((i[0], i[1], i[2]))
+        if i[1] > ymax:
+            muestra = (i[0], i[1], i[2])
+            ymax = i[1]
+
+    aj_lineal.remove(muestra)
+
+    print("ajuste lineal", aj_lineal)  ##
+    print("muestra", muestra)
+
+    val_par = (277, 289, 300, 312, 324, 335, 347, 358, 370, 381)
+
+    u = 0
+    result = []
+    aj_lineal.sort()
+    val_aj = []
+    for i in aj_lineal:
+
+        ##Dibujar circulos y secciones de imagen
+        # print(i[0], i[1], i[2])  ##
+        cv2.circle(cimg, (i[0], i[1]), i[2], (0, 255, 0), 2)
+        cv2.circle(cimg, (i[0], i[1]), 2, (0, 0, 255), 3)
+        xi = i[0] - 2 * i[2] // 5
+        yi = i[1] - 2 * i[2] // 5
+        xf = i[0] + 2 * i[2] // 5
+        yf = i[1] + 2 * i[2] // 5
+        cv2.rectangle(cimg, (xi, yi), (xf, yf), (255, 0, 0), 1)
+        ##Obtener región de color
+        u = u + 1
+        copyimg = cv2.imread(name)
+        # copyimg = cv2.medianBlur(copyimg, 5)
+        imgM = copyimg[yi:yf, xi:xf]
+
+        arr = np.array(imgM)
+
+        R = 0
+        G = 0
+        B = 0
+        pixel = 0
+        for f in range(0, arr.shape[0]):
+            for l in range(0, arr.shape[1]):
+                B = +arr[f][l][0]
+                G = +arr[f][l][1]
+                R = +arr[f][l][2]
+                pixel = +1
+
+        R = R // pixel
+        G = G // pixel
+        B = B // pixel
+        Col = R + G + B
+        result.append((R, G, B))
+        val_aj.append(Col)
+
+    print("sticker:", val_aj)  # 10-100
+
+    ajuste = 0
+    for i in range(10):
+        ajuste = +(val_aj[i] - val_par[i])
+
+    ajuste = ajuste / 10
+
+    print(ajuste)
+
+    # Análisis de la muestra
+
+    ##Dibujar circulos y secciones de imagen
+    i = muestra
+    cv2.circle(cimg, (i[0], i[1]), i[2], (0, 255, 0), 2)
+    cv2.circle(cimg, (i[0], i[1]), 2, (0, 0, 255), 3)
+    xi = i[0] - 2 * i[2] // 5
+    yi = i[1] - 2 * i[2] // 5
+    xf = i[0] + 2 * i[2] // 5
+    yf = i[1] + 2 * i[2] // 5
+    cv2.rectangle(cimg, (xi, yi), (xf, yf), (255, 0, 0), 1)
+    ##Obtener región de color
+    u = u + 1
+    copyimg = cv2.imread(name)
+    # copyimg = cv2.medianBlur(copyimg, 5)
+    imgM = copyimg[yi:yf, xi:xf]
+
+    arr = np.array(imgM)
+
+    R = 0
+    G = 0
+    B = 0
+    pixel = 0
+    for f in range(0, arr.shape[0]):
+        for l in range(0, arr.shape[1]):
+            B = +arr[f][l][0]
+            G = +arr[f][l][1]
+            R = +arr[f][l][2]
+            pixel = +1
+
+    R = R // pixel
+    G = G // pixel
+    B = B // pixel
+    Col_muestra = R + G + B - ajuste
+
+    Concen = -0.66 * Col_muestra + 290.95
+
+    print("Concentración: {:0.2f}".format(Concen))
+
+    if Concen >= 56:  ###CAMBIAS EL VALOR DE UMBRAL
+        print("Tiene daño hepático")
+    else:
+        print("Se encuentra en condición saludable")
+
+
+if __name__=="__main__":
+    name = 'curva_7.jpg'
+    pros = correccion(name)
+    if pros:
+        name2 = "res_" + name
+        correlacion(name2)
+    else:
+        print("La imagen no fue correctamente obtenida")
+
