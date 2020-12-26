@@ -4,6 +4,7 @@ import math
 import cv2
 import numpy as np
 
+//Nomiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii
 
 import matplotlib.image as mtp
 def brightness(im_file):
